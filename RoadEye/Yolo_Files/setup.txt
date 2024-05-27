@@ -1,3 +1,1 @@
-YOLO 04 .CFG: https://github.com/AlexeyAB/darknet/blob/master/cfg/yolov4.cfg
-YOLO 04 COCO-NAMES: https://github.com/AlexeyAB/darknet/blob/master/data/coco.names
 YOLO 04 .WHEIGTHS: https://github.com/AlexeyAB/darknet/releases/download/yolov4/yolov4-p5.weights
