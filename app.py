@@ -42,12 +42,12 @@ def detect_objects(img, net, output_layers, classes, colors):
 
 
 # Carregar a rede YOLO
-net = cv2.dnn.readNet('yolo files/yolov3.weights', 'yolo files/yolov3.cfg')
+net = cv2.dnn.readNet('Yolo_Files/yolov4-tiny.weights', 'Yolo_Files/yolov4-tiny.cfg')
 layer_names = net.getLayerNames()
 output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers().flatten()]
 
 # Carregar nomes das classes
-with open('yolo files/coco.names', 'r') as f:
+with open('Yolo_Files/coco.names', 'r') as f:
     classes = [line.strip() for line in f.readlines()]
 
 colors = np.random.uniform(0, 255, size=(len(classes), 3))

@@ -1,5 +1,5 @@
-pip install streamlit
-pip install opencv-python
-pip install scikit-image
-pip install matplotlib
-pip install filterpy
+streamlit
+opencv-python
+scikit-image
+matplotlib
+filterpy
