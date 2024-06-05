@@ -47,7 +47,15 @@ Bem-vindo ao projeto **RoadEye**! Este sistema inovador utiliza tecnologias avan
 
 2. Instale as dependências:
     ```bash
+    Instalação no TERMINAL:
     pip install -r requirements.txt
+    
+    ```
+    
+    ```bash
+    Instalação no VSCODE:
+    ctrl+shift+p > Select Python Interpreter > Create Virtual Environment > .venv > Python 3.12 > requirements.txt
+    
     ```
 
 
