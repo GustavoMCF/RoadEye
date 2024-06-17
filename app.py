@@ -2,12 +2,14 @@ import streamlit as st
 import cv2
 import numpy as np
 import tempfile
+import time
 from sort_module import Sort  # Certifique-se de que sort_module.py está no mesmo diretório
 
+
 # Função para detectar objetos usando YOLO
-def detect_objects(img, net, output_layers, classes, colors, confidence_threshold=0.3):
+def detectar_objetos(img, net, output_layers, classes, colors, confidence_threshold=0.5, nms_threshold=0.3):
     height, width, channels = img.shape
-    blob = cv2.dnn.blobFromImage(img, 0.00392, (608, 608), (0, 0, 0), True, crop=False)  # Aumentar a resolução
+    blob = cv2.dnn.blobFromImage(img, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
     net.setInput(blob)
     outs = net.forward(output_layers)
 
@@ -19,7 +21,7 @@ def detect_objects(img, net, output_layers, classes, colors, confidence_threshol
             scores = detection[5:]
             class_id = np.argmax(scores)
             confidence = scores[class_id]
-            if confidence > confidence_threshold and classes[class_id] == 'car':  # Ajustar limiar de confiança
+            if confidence > confidence_threshold and classes[class_id] == 'car':
                 center_x = int(detection[0] * width)
                 center_y = int(detection[1] * height)
                 w = int(detection[2] * width)
@@ -30,53 +32,61 @@ def detect_objects(img, net, output_layers, classes, colors, confidence_threshol
                 confidences.append(float(confidence))
                 class_ids.append(class_id)
 
-    indexes = cv2.dnn.NMSBoxes(boxes, confidences, confidence_threshold, 0.3)  # Ajustar NMS
-    detections = []
-    for i in range(len(boxes)):
-        if i in indexes:
-            x, y, w, h = boxes[i]
-            detections.append([x, y, x + w, y + h, confidences[i]])
+    indexes = cv2.dnn.NMSBoxes(boxes, confidences, confidence_threshold, nms_threshold)
+    detections = [[x, y, x + w, y + h, confidences[i]] for i, (x, y, w, h) in enumerate(boxes) if i in indexes]
 
     return detections
 
-# Carregar a rede YOLOv4-tiny
-net = cv2.dnn.readNet('Yolo_Files/yolov4-tiny.weights', 'Yolo_Files/yolov4-tiny.cfg')
-layer_names = net.getLayerNames()
-output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers().flatten()]
 
-# Carregar nomes das classes
-with open('Yolo_Files/coco.names', 'r') as f:
-    classes = [line.strip() for line in f.readlines()]
+# Função para configurar a rede YOLOv4-tiny
+def configurar_yolo():
+    net = cv2.dnn.readNet('yolo files/yolov4-tiny.weights', 'yolo files/yolov4-tiny.cfg')
+    layer_names = net.getLayerNames()
+    output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers().flatten()]
 
-colors = np.random.uniform(0, 255, size=(len(classes), 3))
+    with open('yolo files/coco.names', 'r') as f:
+        classes = [line.strip() for line in f.readlines()]
 
-# Inicializar o rastreador SORT
-tracker = Sort()
-previous_positions = {}
+    colors = np.random.uniform(0, 255, size=(len(classes), 3))
+    return net, output_layers, classes, colors
 
-# Interface Streamlit
-st.title("Detecção e Rastreamento de Carros em Vídeo")
 
-uploaded_file = st.file_uploader("Faça o upload do vídeo", type=["mp4", "avi", "mov"])
+# Função para processar o vídeo
+def processar_video(uploaded_file, time_threshold, process_every_n_frames):
+    net, output_layers, classes, colors = configurar_yolo()
+    tracker = Sort()
+    previous_positions = {}
+    stationary_time = {}
+    stationary_threshold = 4  # Pixels
+    frame_number = 0
+    stopped_cars = set()
+    moving_cars = set()
 
-if uploaded_file is not None:
     tfile = tempfile.NamedTemporaryFile(delete=False)
     tfile.write(uploaded_file.read())
 
     cap = cv2.VideoCapture(tfile.name)
-
     stframe = st.empty()
+    notification_placeholder = st.empty()
+    stats_placeholder = st.empty()
 
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
 
-        detections = detect_objects(frame, net, output_layers, classes, colors)
-        if len(detections) > 0:
-            tracked_objects = tracker.update(np.array(detections))
-        else:
-            tracked_objects = tracker.update(np.empty((0, 5)))
+        frame_number += 1
+        if frame_number % process_every_n_frames != 0:
+            continue
+
+        frame = cv2.resize(frame, (640, 360))
+        start_time = time.time()
+
+        detections = detectar_objetos(frame, net, output_layers, classes, colors)
+        tracked_objects = tracker.update(np.array(detections) if detections else np.empty((0, 5)))
+
+        current_stopped_cars = set()
+        current_moving_cars = set()
 
         for obj in tracked_objects:
             x1, y1, x2, y2, obj_id = map(int, obj)
@@ -84,10 +94,25 @@ if uploaded_file is not None:
 
             if obj_id in previous_positions:
                 prev_x, prev_y = previous_positions[obj_id]
-                movement = np.sqrt((center_x - prev_x)**2 + (center_y - prev_y)**2)
-                if movement < 2:  # Threshold para considerar o carro parado
-                    label = f"Car {obj_id} (Parado)"
+                movement = np.sqrt((center_x - prev_x) ** 2 + (center_y - prev_y) ** 2)
+                if movement < stationary_threshold:
+                    if obj_id not in stationary_time:
+                        stationary_time[obj_id] = time.time()
+                    elapsed_time = time.time() - stationary_time[obj_id]
+                    if elapsed_time > time_threshold:
+                        current_stopped_cars.add(obj_id)
+                        if obj_id not in stopped_cars:
+                            stopped_cars.add(obj_id)
+                            moving_cars.discard(obj_id)
+                            notification_placeholder.write(
+                                f"Car {obj_id} está parado há mais de {time_threshold} segundos!")
+                        label = f"Car {obj_id} (Parado por {int(elapsed_time)}s)"
+                    else:
+                        current_moving_cars.add(obj_id)
+                        label = f"Car {obj_id} (Em movimento)"
                 else:
+                    stationary_time.pop(obj_id, None)
+                    current_moving_cars.add(obj_id)
                     label = f"Car {obj_id} (Em movimento)"
             else:
                 label = f"Car {obj_id}"
@@ -98,6 +123,30 @@ if uploaded_file is not None:
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
             cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.75, color, 2)
 
+        stopped_cars = stopped_cars.intersection(current_stopped_cars).union(current_stopped_cars)
+        moving_cars = moving_cars.intersection(current_moving_cars).union(current_moving_cars)
+
+        processing_time = time.time() - start_time
         stframe.image(frame, channels="BGR")
 
+        stats_placeholder.markdown(f"""
+        ### Estatísticas
+        - Tempo de processamento: {processing_time:.2f} segundos por quadro
+        - Total de carros rastreados: {len(tracked_objects)}
+        - Carros parados: {len(stopped_cars)}
+        - Carros em movimento: {len(moving_cars)}
+        """)
+
     cap.release()
+
+
+# Interface Streamlit
+st.title("Detecção e Rastreamento de Carros em Vídeo")
+
+time_threshold = st.sidebar.slider("Tempo para considerar parado (segundos)", 1, 10, 2)  # Segundos
+process_every_n_frames = st.sidebar.slider("Processar a cada N quadros", 1, 10, 3)  # Processar a cada N quadros
+
+uploaded_file = st.file_uploader("Faça o upload do vídeo", type=["mp4", "avi", "mov"])
+
+if uploaded_file is not None:
+    processar_video(uploaded_file, time_threshold, process_every_n_frames)
