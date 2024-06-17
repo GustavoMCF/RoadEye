@@ -40,11 +40,11 @@ def detectar_objetos(img, net, output_layers, classes, colors, confidence_thresh
 
 # Função para configurar a rede YOLOv4-tiny
 def configurar_yolo():
-    net = cv2.dnn.readNet('yolo files/yolov4-tiny.weights', 'yolo files/yolov4-tiny.cfg')
+    net = cv2.dnn.readNet('Yolo_Files/yolov4-tiny.weights', 'Yolo_Files/yolov4-tiny.cfg')
     layer_names = net.getLayerNames()
     output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers().flatten()]
 
-    with open('yolo files/coco.names', 'r') as f:
+    with open('Yolo_Files/coco.names', 'r') as f:
         classes = [line.strip() for line in f.readlines()]
 
     colors = np.random.uniform(0, 255, size=(len(classes), 3))
