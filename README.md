@@ -85,7 +85,7 @@ Esperamos que este projeto seja útil e contribua para a melhoria da segurança 
 - [Alexsandro Pasinato](https://github.com/Alekk123)
 - [Diego Felix](https://github.com/Diegofelix1989)
 - [Gustavo Ferreira](https://github.com/GustavoMCF)
-- [Mirelly da Silva](https://github.com/MirellySilva)
+- [Mirelly da Silva](https://github.com)
 - [Pedro Melo](https://github.com/PedroHenriqueMM)
 - [Roberto Martins](https://github.com/Robertogithu)
 
